@@ -551,7 +551,7 @@ function createInfoWindow(hit) {
     var href_end = "','_blank')";
     path = hit.description_path;
     patha = path.split('/');
-    if (patha.slice(-1).endswith('.nc')){
+    if (patha.slice(-1).endsWith('.nc')){
         path = path.replace(patha.slice(-1),'');
     }
 
