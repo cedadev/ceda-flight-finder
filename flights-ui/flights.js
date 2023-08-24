@@ -548,10 +548,15 @@ function createInfoWindow(hit) {
     // Add crew here
 
     var href_start = "window.open('http://data.ceda.ac.uk";
-    var href_end = "','_blank')"
+    var href_end = "','_blank')";
+    path = hit.description_path;
+    patha = path.split('/');
+    if (patha.slice(-1).endswith('.nc')){
+        path = path.replace(patha.slice(-1),'');
+    }
 
     content += '<button onclick=' + href_start +
-               hit.description_path + href_end + ">View Flight Data in CEDA Archive</button>";    
+               path + href_end + ">View Flight Data in CEDA Archive</button>";    
 
     content += '</section>';
     info = new google.maps.InfoWindow(
