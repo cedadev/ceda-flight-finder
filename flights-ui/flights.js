@@ -530,7 +530,7 @@ function createInfoWindow(hit) {
     if (hit.properties.location){
         // location is item or array
         var i;
-        if (typeof hit.properties.location == 'object'){
+        if (typeof hit.properties.location == 'string'){
             content += '<p><strong>Location: </strong>' + hit.properties.location ;
         } else {
             content += '<p><strong>Locations: </strong>' + hit.properties.location[0];
