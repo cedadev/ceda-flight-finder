@@ -856,27 +856,21 @@ window.onload = function () {
 
     $('#fpoptext').keypress(
         function (e) {
-            var charcode = e.charCode || e.keyCode || e.which;
-            if (charcode === 13) {
-                if (window.rectangle !== undefined) {
-                    queryRect(map);
-                } else {
-                    redrawMap(map, false, false);
-                }
-            }
+            e.preventDefault();
+	    var charcode = e.charCode || e.keyCode || e.which;
+            var newval = $('#fpoptext').val() + e.key;
+	    $('#fpoptext').val(newval);
+            if (charcode === 13) {attempt_window_update(map)}
         }
     );
 
     $('#kwtext').keypress(
         function (e) {
-            var charcode = e.charCode || e.keyCode || e.which;
-            if (charcode === 13) {
-                if (window.rectangle !== undefined) {
-                    queryRect(map);
-                } else {
-                    redrawMap(map, false, false);
-                }
-            }
+            e.preventDefault();
+	    var charcode = e.charCode || e.keyCode || e.which;
+            var newval = $('#kwtext').val() + e.key;
+	    $('#kwtext').val(newval);
+            if (charcode === 13) {attempt_window_update(map)}
         }
     );
 
