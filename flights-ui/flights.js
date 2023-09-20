@@ -802,6 +802,15 @@ function sendHistogramRequest(map, timespecifier) {
     };
 }
 
+function checkCharCode(code){
+    if (!(code > 47 && code < 58) && // numeric (0-9)
+        !(code > 64 && code < 91) && // upper alpha (A-Z)
+        !(code > 96 && code < 123)) { // lower alpha (a-z)
+	return false;
+    }
+    return true;
+}
+
 function attempt_window_update(map){
     if (window.rectangle !== undefined) {
         queryRect(map);
@@ -838,8 +847,10 @@ window.onload = function () {
         function (e) {
             e.preventDefault();
 	    var charcode = e.charCode || e.keyCode || e.which;
-            var newval = $('#fnumtext').val() + e.key;
-	    $('#fnumtext').val(newval);
+	    if (checkCharCode(code){
+                var newval = $('#fnumtext').val() + e.key;
+	        $('#fnumtext').val(newval);
+	    }
             if (charcode === 13) {attempt_window_update(map)}
         }
     );
@@ -858,8 +869,10 @@ window.onload = function () {
         function (e) {
             e.preventDefault();
 	    var charcode = e.charCode || e.keyCode || e.which;
-            var newval = $('#fpoptext').val() + e.key;
-	    $('#fpoptext').val(newval);
+            if (checkCharCode(code){
+                var newval = $('#fpoptext').val() + e.key;
+	        $('#fpoptext').val(newval);
+	    }
             if (charcode === 13) {attempt_window_update(map)}
         }
     );
@@ -868,8 +881,10 @@ window.onload = function () {
         function (e) {
             e.preventDefault();
 	    var charcode = e.charCode || e.keyCode || e.which;
-            var newval = $('#kwtext').val() + e.key;
-	    $('#kwtext').val(newval);
+            if (checkCharCode(code){
+                var newval = $('#kwtext').val() + e.key;
+	        $('#kwtext').val(newval);
+	    }
             if (charcode === 13) {attempt_window_update(map)}
         }
     );
