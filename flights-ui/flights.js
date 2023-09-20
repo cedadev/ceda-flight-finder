@@ -530,7 +530,8 @@ function createInfoWindow(hit) {
     if (hit.properties.location){
         // location is item or array
         var i;
-        if (typeof hit.properties.location == 'string'){
+	first = hit.properties.location;
+        if (!Array.isArray(hit.properties.location)){
             content += '<p><strong>Location: </strong>' + hit.properties.location ;
         } else {
             content += '<p><strong>Locations: </strong>' + hit.properties.location[0];
@@ -550,10 +551,8 @@ function createInfoWindow(hit) {
     var href_start = "window.open('http://data.ceda.ac.uk";
     var href_end = "','_blank')";
     path = hit.description_path;
-    patha = path.split('/');
-    if (patha.slice(-1).endsWith('.nc')){
-        path = path.replace(patha.slice(-1),'');
-    }
+    parts = path.split('/');
+    check = parts.slice(-1);
 
     content += '<button onclick=' + href_start +
                path + href_end + ">View Flight Data in CEDA Archive</button>";    
@@ -622,7 +621,7 @@ function drawFlightTracks(gmap, hits) {
 
                         window.setTimeout(function () {
                             addBoundsChangedListener(gmap);
-                        }, 500);
+                        }, 5000);
                     };
                 }
             )(i));
@@ -660,12 +659,12 @@ function redrawMap(gmap, add_listener, fulldraw) {
     }
     request = createElasticsearchRequest(null, fpop, false);
     requestData(request, updateMap, gmap, fulldraw);
-
+/*
     if (add_listener === true) {
         window.setTimeout(function () {
             addBoundsChangedListener(gmap);
-        }, 500);
-    }
+        }, 5000);
+    }*/
 }
 
 function addBoundsChangedListener(gmap) {
@@ -803,6 +802,14 @@ function sendHistogramRequest(map, timespecifier) {
     };
 }
 
+function attempt_window_update(map){
+    if (window.rectangle !== undefined) {
+        queryRect(map);
+    } else {
+        redrawMap(map, false, false);
+    }
+}
+
 // ----------------------------- window.onload --------------------------------
 window.onload = function () {
     var geocoder, lat, lon;
@@ -829,14 +836,11 @@ window.onload = function () {
     //------------------------------- Text Input -------------------------------
     $('#fnumtext').keypress(
         function (e) {
-            var charcode = e.charCode || e.keyCode || e.which;
-            if (charcode === 13) {
-                if (window.rectangle !== undefined) {
-                    queryRect(map);
-                } else {
-                    redrawMap(map, false, false);
-                }
-            }
+            e.preventDefault();
+	    var charcode = e.charCode || e.keyCode || e.which;
+            var newval = $('#fnumtext').val() + e.key;
+	    $('#fnumtext').val(newval);
+            if (charcode === 13) {attempt_window_update(map)}
         }
     );
 
@@ -877,12 +881,8 @@ window.onload = function () {
     );
 
     $('#applyfil').click(
-        function() {
-            if (window.rectangle !== undefined) {
-                queryRect(map);
-            } else {
-                redrawMap(map, false, false);
-            }
+	function() {
+            attempt_window_update(map)
         }
     );
 
