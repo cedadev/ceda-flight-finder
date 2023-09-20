@@ -847,7 +847,7 @@ window.onload = function () {
         function (e) {
             e.preventDefault();
 	    var charcode = e.charCode || e.keyCode || e.which;
-	    if (checkCharCode(code){
+	    if (checkCharCode(charcode)){
                 var newval = $('#fnumtext').val() + e.key;
 	        $('#fnumtext').val(newval);
 	    }
@@ -869,7 +869,7 @@ window.onload = function () {
         function (e) {
             e.preventDefault();
 	    var charcode = e.charCode || e.keyCode || e.which;
-            if (checkCharCode(code){
+            if (checkCharCode(charcode)){
                 var newval = $('#fpoptext').val() + e.key;
 	        $('#fpoptext').val(newval);
 	    }
@@ -881,7 +881,7 @@ window.onload = function () {
         function (e) {
             e.preventDefault();
 	    var charcode = e.charCode || e.keyCode || e.which;
-            if (checkCharCode(code){
+            if (checkCharCode(charcode)){
                 var newval = $('#kwtext').val() + e.key;
 	        $('#kwtext').val(newval);
 	    }
