@@ -207,6 +207,7 @@ function createElasticsearchRequest(gmaps_corners, fpop, drawing) {
             'include': [
                 'es_id',
                 'description_path',
+                'catalogue_link',
                 'collection',
                 'geometry.display',
                 'properties',
@@ -556,6 +557,14 @@ function createInfoWindow(hit) {
 
     content += '<button onclick=' + href_start +
                path + href_end + ">View Flight Data in CEDA Archive</button>";    
+
+    if (hit.catalogue_link){
+        var href_start = "window.open('";
+        var href_end = "','_blank')";
+        content += '<button onclick=' + href_start +
+               hit.catalogue_link + href_end + ">View Catalogue Entry</button>";
+    }
+
 
     content += '</section>';
     info = new google.maps.InfoWindow(
