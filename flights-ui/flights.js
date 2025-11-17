@@ -120,7 +120,7 @@ function geoShapeRequest(envelope, capswitch) {
 
     var gsq = {
         "geo_shape": {
-            "geometry.search": gsearch
+            "geometry": gsearch
         }
     }
     return gsq;
@@ -145,8 +145,8 @@ function getTimeRequest(){
         else {
             range = {
                 "properties.start_datetime":{
-                    "from":def_start,
-                    "to":end_time
+                    "from":def_start+'T00:00:00Z',
+                    "to":end_time+'T00:00:00Z'
                 }
             };
         }
@@ -154,7 +154,7 @@ function getTimeRequest(){
         if (end_time == ''){
             range = {
                 "properties.start_datetime":{
-                    "from":start_time,
+                    "from":start_time+'T00:00:00Z',
                     "to":def_time
                 }
             }
@@ -162,8 +162,8 @@ function getTimeRequest(){
         else {
             range = {
                 "properties.start_datetime":{
-                    "from":start_time,
-                    "to":end_time
+                    "from":start_time+'T00:00:00Z',
+                    "to":end_time+'T00:00:00Z'
                 }
             }
         }
@@ -228,18 +228,18 @@ function createElasticsearchRequest(gmaps_corners, fpop, drawing) {
         'aggs' : {
             'variables': {
                 "terms":{
-                    "field":"properties.variables.keyword"
+                    "field":"properties.variables"
                 }
             },
             'instruments': {
                 "terms":{
-                    "field":"properties.instruments.keyword",
+                    "field":"properties.instruments",
                     "size":10
                 }
             },
             'collections':{
                 "terms":{
-                    "field":"collection.keyword"
+                    "field":"properties.collections"
                 }
             },
         },
@@ -311,10 +311,12 @@ function createElasticsearchRequest(gmaps_corners, fpop, drawing) {
         }
         // Push All Strings
         if (search_str.length > 0){
+            var search_arr = ["*" + search_str + "*", "*" + search_str, search_str + '*', search_str];
             var query_str = {
-                "query_string":
-                {
-                    "query": search_str
+                "simple_query_string":{
+                    "query": search_arr.join(' | '),
+                    "fields": ['*'],
+                    "default_operator": "OR"
                 }
             };
             request.query.bool.filter.bool.must.push(query_str);
@@ -679,15 +681,21 @@ function addBoundsChangedListener(gmap) {
 }
 
 // -------------------------------- Histogram ---------------------------------
-function drawHistogram(map, request) {
+function drawHistogram(map, request, interval) {
     var ost, buckets, keys, counts, i;
 
     ost = request.aggregations.only_sensible_timestamps;
-    buckets = ost.docs_over_time.buckets;
+    buckets = ost.buckets;
     keys = [];
     counts = [];
     for (i = 0; i < buckets.length; i += 1) {
-        keys.push(buckets[i].key_as_string);
+        var key = buckets[i].key_as_string;
+        if (interval == 'year'){
+            key = key.split('-')[0];
+        } else {
+            key = key.split('-')[0] + '-' + key.split('-')[1];
+        }
+        keys.push(key);
         counts.push(buckets[i].doc_count);
     }
 
@@ -728,11 +736,23 @@ function drawHistogram(map, request) {
                         click: function(){
                             // Refine time window here - and only refresh hist if category not already monthly
                             var date = this.category;
-                            if (date.length < 5){
+
+                            if (date.length == 4){
+                                start_time = date + '-01-01';
+                                end_time  = date + '-12-31';
+                                var update = true;
+                            } else {
+                                start_time = date + '-01';
+                                end_time = date + '-31';
+                                var update = false;
+                            }
+                            $('#start_time').val(start_time);
+                            $('#end_time').val(end_time);
+                            if (update){
                                 sendHistogramRequest(map, date);
-                                $('#start_time').val(date + '-01-01' );
-                                $('#end_time').val(date + '-12-31');
-                                redrawMap(map, false, false);
+                            }
+                            redrawMap(map, false, false);
+                            /*
                             } else {
                                 // Don't update histogram but do update map
                                 // Reset time picker values
@@ -741,6 +761,7 @@ function drawHistogram(map, request) {
                                 $('#end_time').val(date_arr[1] + '-' + date_arr[0] + '-31');
                                 redrawMap(map, false, false);
                             }
+                            */
                         }
                     }
                 }
@@ -760,48 +781,41 @@ function sendHistogramRequest(map, timespecifier) {
     if (timespecifier == 'all'){
         range = {'range':{
             'properties.start_datetime': {
-                'gt': '1985-01-01'
+                'gt': '1985-01-01T00:00:00'
             }}
         };
         format = 'yyyy';
         interval = 'year';
     }
     else {
-        range = {'range':{
-            'properties.start_datetime': {
-                'gt': timespecifier+'-01-01',
-                'lt': timespecifier+'-12-31'
-            }}
-        };
+        range = {'range':getTimeRequest()};
         format = 'MM-yyyy';
         interval = 'month';
     }
     req = {
-        'aggs': {
-            'only_sensible_timestamps': {
-                'filter': range,
-                'aggs': {
-                    'docs_over_time': {
-                        'date_histogram': {
-                            'field': 'properties.start_datetime',
-                            'format': format,
-                            'interval': interval,
-                            'min_doc_count': 0
-                        }
-                    }
-                }
+        "query":{
+            "bool":{
+                "filter":[range]
             }
         },
-        'size': 0
-    };
+        "aggs": {
+            "only_sensible_timestamps": {
+            "date_histogram": {
+                "field": "properties.start_datetime",
+                "calendar_interval": interval,
+            }
+            }
+        }
+        };
     xhr = new XMLHttpRequest();
     xhr.open('POST', ES_URL, true);
     xhr.setRequestHeader("Content-Type", "application/json")
-    xhr.send(JSON.stringify(req));
+    var req_str = JSON.stringify(req);
+    xhr.send(req_str);
     xhr.onload = function (e) {
         if (xhr.readyState === 4) {
             response = JSON.parse(xhr.responseText);
-            drawHistogram(map, response);
+            drawHistogram(map, response, interval);
         }
     };
 }
