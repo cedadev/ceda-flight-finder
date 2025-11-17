@@ -53,7 +53,7 @@ function getParameterByName(name) {
 
 // Window constants
 const ES_HOST = 'https://elasticsearch.ceda.ac.uk/'
-var INDEX = "stac-flightfinder-items"; //getParameterByName('index') || 'eufar';
+var INDEX = "items_ceda_flights"; //getParameterByName('index') || 'eufar';
 var ES_URL = ES_HOST + INDEX + '/_search';
 var TRACK_COLOURS = [
     '#4D4D4D', '#5DA5DA', '#FAA43A',
@@ -61,7 +61,7 @@ var TRACK_COLOURS = [
     '#B276B2', '#DECF3F', '#F15854'
 ];
 
-var FPOP = 500;
+var FPOP = 1500;
 
 // -------------------------- String Hash For Colors --------------------------
 String.prototype.hashCode = function () {
@@ -205,11 +205,12 @@ function createElasticsearchRequest(gmaps_corners, fpop, drawing) {
     request = {
         '_source': {
             'include': [
-                'es_id',
-                'description_path',
-                'catalogue_link',
+                //'es_id',
+                //'description_path',
+                //'catalogue_link',
+                'assets',
                 'collection',
-                'geometry.display',
+                'geometry',
                 'properties',
             ]
         },
@@ -217,13 +218,7 @@ function createElasticsearchRequest(gmaps_corners, fpop, drawing) {
             'bool': {
                 'filter': {
                     'bool': {
-                        'must': [
-                            {
-                                "exists": {
-                                    "field": "geometry.display.type"
-                                }
-                            },
-                        ],
+                        'must': [],
                         'must_not': [],
                         'should':[]
                     }
@@ -474,7 +469,7 @@ function createInfoWindow(hit) {
     if (hit.properties.flight_num) {
         content += '<p><strong>Flight Number: </strong>' +
                     hit.properties.flight_num 
-        content += ' (' + hit.collection.toUpperCase() + ')' + '</p>';
+        content += ' (' + hit.properties.collections[0].toUpperCase() + ')' + '</p>';
     } else if (hit.properties.pcode) {
         // Probably an arsf flight
         content += '<p><strong>Project Code: </strong>' +
@@ -549,20 +544,19 @@ function createInfoWindow(hit) {
 
     // Add crew here
 
-    var href_start = "window.open('http://data.ceda.ac.uk";
-    var href_end = "','_blank')";
-    path = hit.description_path;
-    parts = path.split('/');
-    check = parts.slice(-1);
-
-    content += '<button onclick=' + href_start +
+    if (hit.properties.description_path){
+        var href_start = "window.open('http://data.ceda.ac.uk";
+        var href_end = "','_blank')";
+        path = hit.properties.description_path;
+        content += '<button onclick=' + href_start +
                path + href_end + ">View Flight Data in CEDA Archive</button>";    
+    }
 
-    if (hit.catalogue_link){
+    if (hit.assets.catalogue_link){
         var href_start = "window.open('";
         var href_end = "','_blank')";
         content += '<button onclick=' + href_start +
-               hit.catalogue_link + href_end + ">View Catalogue Entry</button>";
+               hit.assets.catalogue_link.href + href_end + ">View Catalogue Entry</button>";
     }
 
 
@@ -576,6 +570,7 @@ function createInfoWindow(hit) {
 
     return info;
 }
+
 
 function drawFlightTracks(gmap, hits) {
     var colour_index, geom, hit, i, info_window, options, display, gs;
@@ -596,7 +591,7 @@ function drawFlightTracks(gmap, hits) {
         };
 
         // Create GeoJSON object - deal with MultiLineString
-        display = hit._source.geometry.display;
+        display = hit._source.geometry;
         geoms = GeoJSON(display, options);
         count_lines++;
         for (geom of geoms){
@@ -663,8 +658,8 @@ function redrawMap(gmap, add_listener, fulldraw) {
     if (!fpop){
         fpop = FPOP;
     }
-    if (parseInt(fpop) > 1000){
-        fpop = 1000;
+    if (parseInt(fpop) > 1500){
+        fpop = 1500;
     }
     request = createElasticsearchRequest(null, fpop, false);
     requestData(request, updateMap, gmap, fulldraw);
