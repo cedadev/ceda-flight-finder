@@ -53,6 +53,7 @@ function getParameterByName(name) {
 
 // Window constants
 const ES_HOST = 'https://elasticsearch.ceda.ac.uk/'
+const STAC_API = 'https://api.stac.ceda.ac.uk/collections/ceda_flights/items'
 var INDEX = "stac-flightfinder-items"; //getParameterByName('index') || 'eufar';
 var ES_URL = ES_HOST + INDEX + '/_search';
 var TRACK_COLOURS = [
@@ -61,7 +62,7 @@ var TRACK_COLOURS = [
     '#B276B2', '#DECF3F', '#F15854'
 ];
 
-var FPOP = 500;
+var FPOP = 1500;
 
 // -------------------------- String Hash For Colors --------------------------
 String.prototype.hashCode = function () {
@@ -171,6 +172,77 @@ function getTimeRequest(){
     return range;
 
 }
+
+
+function createStacApiUrl(gmaps_corners, fpop, drawing) {
+
+    let nw, se;
+    let bboxParts = [];
+
+    if (drawing) {
+        nw = gmaps_corners[0];
+        se = gmaps_corners[1];
+
+        // Handle dateline crossing
+        if (datelineCheck(nw[0], se[0])) {
+            // Two bounding boxes if crossing dateline
+            bboxParts.push([-180, nw[1], se[0], se[1]]);
+            bboxParts.push([nw[0], nw[1], 180, se[1]]);
+        } else {
+            bboxParts.push([nw[0], se[1], se[0], nw[1]]);
+        }
+    }
+
+    // Build query parameters
+    const params = new URLSearchParams();
+
+    // Add bbox (if multiple, join with commas)
+    if (bboxParts.length > 0) {
+        // STAC expects bbox as minLon,minLat,maxLon,maxLat
+        params.append("bbox", bboxParts.map(b => b.join(",")).join(","));
+    }
+
+    // Add limit
+    params.append("limit", fpop);
+
+    // Add datetime filter
+    const range = getTimeRequest(); // e.g., "2020-01-01/2020-12-31"
+    if (range) {
+        params.append("datetime", range);
+    }
+
+    // Add collections
+    const coll = requestFromButtons();
+    if (coll) {
+        params.append("collections", coll);
+    }
+
+    // Add keyword search (STAC doesn't have AND logic in GET easily, so use query param)
+    let searchTerms = [];
+    const tf = requestFromKeyword();
+    if (tf) searchTerms.push(...tf);
+
+    const vars = requestFromMultiselect('#var_multiselect');
+    if (vars) searchTerms.push(...vars);
+
+    const insts = requestFromMultiselect('#inst_multiselect');
+    if (insts) searchTerms.push(...insts);
+
+    if (searchTerms.length > 0) {
+        params.append("q", searchTerms.join(" "));
+    }
+
+    // Add flight number filter (custom property)
+    const fnums = requestFromFlightNum();
+    if (fnums) {
+        // STAC GET doesn't support complex property filters easily; might need POST for this
+        params.append("query", JSON.stringify({ "properties.flight_num": { "in": fnums } }));
+    }
+
+    // Return full URL
+    return `${STAC_API}?${params.toString()}`;
+}
+
 
 function createElasticsearchRequest(gmaps_corners, fpop, drawing) {
     // Function for assembling all components of elasticsearch request
@@ -347,9 +419,9 @@ function createElasticsearchRequest(gmaps_corners, fpop, drawing) {
     return request;
 }
 
-function requestData(request, callback, gmap, fulldraw){
+function requestData(request_url, callback, gmap, fulldraw){
     // Simple test function to switch to test data
-    sendElasticsearchRequest(request, callback, gmap, fulldraw);
+    sendStacApiRequest(request_url, callback, gmap, fulldraw);
     //getTestJson(callback, gmap);
 }
 
@@ -358,6 +430,27 @@ function getTestJson(callback, gmap){
     $.getJSON("jsons/test1.json", function(json){
         callback(json,gmap, false)
     });
+}
+
+function sendStacApiRequest(request_url, callback, gmap, fulldraw) {
+    // Function for constructing XHR XML Request and handling HttpResponse from ES Cluster
+    var xhr, response;
+    xhr = new XMLHttpRequest();
+    xhr.open('GET', request_url, true);
+    xhr.setRequestHeader("Content-Type", "application/json")
+    //var request_str = JSON.stringify({})
+    xhr.send();
+    xhr.onload = function () {
+        if (xhr.readyState === 4) {
+            response = JSON.parse(xhr.responseText);
+
+            if (gmap) {
+                callback(response, gmap, fulldraw);
+            } else {
+                callback(response, fulldraw);
+            }
+        }
+    };
 }
 
 function sendElasticsearchRequest(request, callback, gmap, fulldraw) {
@@ -383,16 +476,17 @@ function sendElasticsearchRequest(request, callback, gmap, fulldraw) {
 
 function updateMap(response, gmap, fulldraw) {
     // Function for updating map and UI interface after response is received
-    if (response.hits) {
+    if (response.features) {
         // Update "hits" and "response time" fields
-        $('#resptime').html(response.took);
-        $('#numresults').html(response.hits.hits.length);
+        // $('#resptime').html(response.took);
+        $('#numresults').html(response.numReturned);
 
         // Draw flight tracks on a map
-        drawFlightTracks(gmap, response.hits.hits);
+        drawFlightTracks(gmap, response.features);
         var temp = geometries;
     }
 
+    /*
     if (response.aggregations) {
         // Generate variable aggregation on map and display
         if (response.aggregations.variables){
@@ -411,6 +505,7 @@ function updateMap(response, gmap, fulldraw) {
                 response.aggregations.collections.buckets,'coll_select', gmap);
         }
     }
+        */
 }
 
 function updateRawJSON(response) {
@@ -466,15 +561,12 @@ function centreMap(gmap, geocoder, loc) {
 
 function createInfoWindow(hit) {
     var content, info, index;
-
-    hit = hit._source;
-
     content = "<section>"
     
     if (hit.properties.flight_num) {
         content += '<p><strong>Flight Number: </strong>' +
                     hit.properties.flight_num 
-        content += ' (' + hit.collection.toUpperCase() + ')' + '</p>';
+        content += ' (' + hit.properties.collections[0].toUpperCase() + ')' + '</p>';
     } else if (hit.properties.pcode) {
         // Probably an arsf flight
         content += '<p><strong>Project Code: </strong>' +
@@ -552,17 +644,17 @@ function createInfoWindow(hit) {
     var href_start = "window.open('http://data.ceda.ac.uk";
     var href_end = "','_blank')";
     path = hit.description_path;
-    parts = path.split('/');
-    check = parts.slice(-1);
+    //parts = path.split('/');
+    //check = parts.slice(-1);
 
     content += '<button onclick=' + href_start +
                path + href_end + ">View Flight Data in CEDA Archive</button>";    
 
-    if (hit.catalogue_link){
+    if (hit.assets.catalogue_link){
         var href_start = "window.open('";
         var href_end = "','_blank')";
         content += '<button onclick=' + href_start +
-               hit.catalogue_link + href_end + ">View Catalogue Entry</button>";
+               hit.assets.catalogue_link.href + href_end + ">View Catalogue Entry</button>";
     }
 
 
@@ -584,7 +676,7 @@ function drawFlightTracks(gmap, hits) {
 
     for (hit of hits) {
 
-        colour_index = (hit._id.hashCode() % TRACK_COLOURS.length);
+        colour_index = (hit.id.hashCode() % TRACK_COLOURS.length);
         if (colour_index < 0) {
             colour_index = -colour_index;
         }
@@ -596,7 +688,7 @@ function drawFlightTracks(gmap, hits) {
         };
 
         // Create GeoJSON object - deal with MultiLineString
-        display = hit._source.geometry.display;
+        display = hit.geometry;
         geoms = GeoJSON(display, options);
         count_lines++;
         for (geom of geoms){
@@ -666,8 +758,8 @@ function redrawMap(gmap, add_listener, fulldraw) {
     if (parseInt(fpop) > 1000){
         fpop = 1000;
     }
-    request = createElasticsearchRequest(null, fpop, false);
-    requestData(request, updateMap, gmap, fulldraw);
+    request_url = createStacApiUrl(null, fpop, false);
+    requestData(request_url, updateMap, gmap, fulldraw);
 /*
     if (add_listener === true) {
         window.setTimeout(function () {
@@ -686,6 +778,8 @@ function addBoundsChangedListener(gmap) {
 // -------------------------------- Histogram ---------------------------------
 function drawHistogram(map, request) {
     var ost, buckets, keys, counts, i;
+
+    return;
 
     ost = request.aggregations.only_sensible_timestamps;
     buckets = ost.docs_over_time.buckets;
@@ -799,6 +893,7 @@ function sendHistogramRequest(map, timespecifier) {
         },
         'size': 0
     };
+    return;
     xhr = new XMLHttpRequest();
     xhr.open('POST', ES_URL, true);
     xhr.setRequestHeader("Content-Type", "application/json")
@@ -927,24 +1022,24 @@ window.onload = function () {
     $('#raw_json').click(
         function () {
             var req;
-            req = createElasticsearchRequest(null, FPOP, false);
-            requestData(req, updateRawJSON, false);
+            req_url = createStacApiUrl(null, FPOP, false);
+            requestData(req_url, updateRawJSON, false);
         }
     );
 
     $('#file_paths').click(
         function () {
-            var req;
-            requestData(req, updateFilePaths, false);
-            req = createElasticsearchRequest(null, FPOP, false);
+            var req_url;
+            req_url = createStacApiUrl(null, FPOP, false);
+            requestData(req_url, updateFilePaths, false);
         }
     );
 
     $('#dl_urls').click(
         function () {
-            var req;
-            requestData(req, updateDownloadPaths, false);
-            req = createElasticsearchRequest(null, FPOP, false);
+            var req_url;
+            req_url = createStacApiUrl(null, FPOP, false);
+            requestData(req_url, updateDownloadPaths, false);
         }
     );
 
